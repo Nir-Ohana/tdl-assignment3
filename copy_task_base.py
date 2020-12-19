@@ -4,15 +4,18 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import sys
+from time import time
 
 # print(np.__version__)
-# print(torch.__version__)
+from torch.backends import cudnn
+
+print(torch.__version__)
 
 # Set the seed of PRNG manually for reproducibility
 seed = 1234
 torch.manual_seed(seed)
 np.random.seed(seed)
-
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def cross_entropy_formula(step):
     return (10 * np.log(8)) / (step + 20)
@@ -28,7 +31,7 @@ class MLP(nn.Module):
         bound = math.sqrt(k)
         # toch.rand returns a tensor samples uniformly in [0, 1).
         # we scaling it to [l = -bound, r = bound] using the formula: (l - r) * torch.rand(x, y) + r
-        self.W = (-2 * bound) * torch.rand(out_features, in_features) + bound
+        self.W = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
 
     def forward(self, x):
         _, input_num = x.shape
@@ -49,8 +52,8 @@ class RNN(nn.Module):
         bound = math.sqrt(k)
         # toch.rand returns a tensor samples uniformly in [0, 1).
         # we scaling it to [l = -bound, r = bound] using the formula: (l - r) * torch.rand(x, y) + r
-        self.W = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.U = (-2 * bound) * torch.rand(out_features, out_features) + bound
+        self.W = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
+        self.U = (-2 * bound) * torch.rand(out_features, out_features).cuda(device) + bound
 
     def forward(self, x, b_prev=None):
 
@@ -86,14 +89,14 @@ class LSTM(nn.Module):
         bound = math.sqrt(k)
         # toch.rand returns a tensor samples uniformly in [0, 1).
         # we scaling it to [l = -bound, r = bound] using the formula: (l - r) * torch.rand(x, y) + r
-        self.Wi = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.Ui = (-2 * bound) * torch.rand(out_features, out_features) + bound
-        self.Wf = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.Uf = (-2 * bound) * torch.rand(out_features, out_features) + bound
-        self.Wg = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.Ug = (-2 * bound) * torch.rand(out_features, out_features) + bound
-        self.Wo = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.Uo = (-2 * bound) * torch.rand(out_features, out_features) + bound
+        self.Wi = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
+        self.Ui = (-2 * bound) * torch.rand(out_features, out_features).cuda(device) + bound
+        self.Wf = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
+        self.Uf = (-2 * bound) * torch.rand(out_features, out_features).cuda() + bound
+        self.Wg = (-2 * bound) * torch.rand(out_features, in_features).cuda() + bound
+        self.Ug = (-2 * bound) * torch.rand(out_features, out_features).cuda() + bound
+        self.Wo = (-2 * bound) * torch.rand(out_features, in_features).cuda() + bound
+        self.Uo = (-2 * bound) * torch.rand(out_features, out_features).cuda() + bound
 
     def forward(self, x, state=None):
         h_prev = state[0] if state is not None else None
@@ -152,14 +155,14 @@ class Model(nn.Module):
         self.m = m
         self.k = k
         self.architecture = architecture
-        self.rnn = architecture(m + 1, k)
-        self.V = nn.Linear(k, m)
+        self.rnn = architecture(m + 1, k).cuda(device)
+        self.V = nn.Linear(k, m).cuda(device)
 
         # loss for the copy data
         self.loss_func = nn.CrossEntropyLoss()
 
     def forward(self, inputs):
-        state = torch.zeros(inputs.size(0), self.k, requires_grad=False)
+        state = torch.zeros(inputs.size(0), self.k, requires_grad=False).cuda()
 
         outputs = []
         for input in torch.unbind(inputs, dim=1):
@@ -178,11 +181,11 @@ class Model(nn.Module):
         return self.loss_func(logits.view(-1, 9), y.view(-1))
 
 
-T = 8
+T = 98
 K = 3
 
 batch_size = 128
-iter = 5000
+iter = 20000
 n_train = iter * batch_size
 n_classes = 9
 hidden_size = 64
@@ -202,25 +205,32 @@ def main():
     print('{}, {}'.format(X.shape, Y.shape))
     plt.imshow(X[:3])
     plt.show()
-
-    ohX = torch.FloatTensor(batch_size, T + 2 * K, n_characters)
+    X = X.cuda()
+    Y = Y.cuda()
+    ohX = torch.FloatTensor(batch_size, T + 2 * K, n_characters).cuda()
     onehot(ohX, X[:batch_size])
     # print(ohX)
     # print('{}, {}'.format(X[:batch_size].shape, ohX.shape))
-
     model_MLP = Model(n_classes, hidden_size, MLP)
     model_RNN = Model(n_classes, hidden_size, RNN)
     model_LSTM = Model(n_classes, hidden_size, LSTM)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(device)
+    model_MLP.cuda(device)
+    model_RNN.cuda(device)
+    model_LSTM.cuda(device)
+
+    cudnn.benchmark = True
+    cudnn.fastest = True
     model_MLP.train()
     model_RNN.train()
     model_LSTM.train()
-
     opt_MLP = torch.optim.RMSprop(model_MLP.parameters(), lr=lr)
     opt_RNN = torch.optim.RMSprop(model_RNN.parameters(), lr=lr)
     opt_LSTM = torch.optim.RMSprop(model_LSTM.parameters(), lr=lr)
 
     print("Baseline Loss {:.3f}".format(cross_entropy_formula(1)))
+
+    t_0 = time()
     for step in range(iter):
         # xs.append(step)
         # ys.append(cross_entropy_formula(step))
@@ -255,9 +265,9 @@ def main():
         if step % print_every == 0:
             print('Step={}, Loss={:.4f}'.format(step, loss_MLP.item()))
 
-    # baseline plot
+    t_1 = time()
+    print("training took : {:.3f}".format(t_1 - t_0))
     plt.plot(xs, ys, '--g', label='Baseline')
-    # rnn plot
     plt.plot(xs, ys_loss_mlp, '-m', label='MLP')
     plt.plot(xs, ys_loss_rnn, '-y', label='RNN')
     plt.plot(xs, ys_loss_lstm, '-c', label='LSTM')
