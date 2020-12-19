@@ -17,6 +17,7 @@ torch.manual_seed(seed)
 np.random.seed(seed)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
 def cross_entropy_formula(step):
     return (10 * np.log(8)) / (step + 20)
 
@@ -181,11 +182,11 @@ class Model(nn.Module):
         return self.loss_func(logits.view(-1, 9), y.view(-1))
 
 
-T = 98
+T = 8
 K = 3
 
 batch_size = 128
-iter = 20000
+iter = 5000
 n_train = iter * batch_size
 n_classes = 9
 hidden_size = 64
