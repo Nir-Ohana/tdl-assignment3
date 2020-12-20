@@ -93,11 +93,11 @@ class LSTM(nn.Module):
         self.Wi = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
         self.Ui = (-2 * bound) * torch.rand(out_features, out_features).cuda(device) + bound
         self.Wf = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
-        self.Uf = (-2 * bound) * torch.rand(out_features, out_features).cuda() + bound
-        self.Wg = (-2 * bound) * torch.rand(out_features, in_features).cuda() + bound
-        self.Ug = (-2 * bound) * torch.rand(out_features, out_features).cuda() + bound
-        self.Wo = (-2 * bound) * torch.rand(out_features, in_features).cuda() + bound
-        self.Uo = (-2 * bound) * torch.rand(out_features, out_features).cuda() + bound
+        self.Uf = (-2 * bound) * torch.rand(out_features, out_features).cuda(device) + bound
+        self.Wg = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
+        self.Ug = (-2 * bound) * torch.rand(out_features, out_features).cuda(device) + bound
+        self.Wo = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
+        self.Uo = (-2 * bound) * torch.rand(out_features, out_features).cuda(device) + bound
 
     def forward(self, x, state=None):
         h_prev = state[0] if state is not None else None
@@ -150,7 +150,7 @@ def onehot(out, input):
 
 # Class for handling copy data
 class Model(nn.Module):
-    def __init__(self, m, k, architecture=MLP):
+    def __init__(self, m, k, architecture):
         super(Model, self).__init__()
 
         self.m = m
