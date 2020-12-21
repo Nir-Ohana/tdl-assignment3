@@ -5,8 +5,6 @@ import torch.nn as nn
 import sys
 import math
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
 print(np.__version__)
 print(torch.__version__)
 
@@ -45,8 +43,8 @@ class Model(nn.Module):
         self.m = m
         self.k = k
         self.architecture = architecture
-        self.rnn = architecture(m + 1, k).cuda(device)
-        self.V = nn.Linear(k, m).cuda(device)
+        self.rnn = architecture(m + 1, k)
+        self.V = nn.Linear(k, m)
 
         # loss for the copy data
         self.loss_func = nn.CrossEntropyLoss()
@@ -56,7 +54,12 @@ class Model(nn.Module):
 
         outputs = []
         for input in torch.unbind(inputs, dim=1):
-            state = self.rnn(input, state)
+            if self.architecture == MLP:
+                state = self.rnn(input)
+            elif self.architecture == RNN:
+                state = self.rnn(input, state)
+            elif self.architecture == LSTM:
+                state = self.rnn(input, state)[1]
             outputs.append(self.V(state))
 
         return torch.stack(outputs, dim=1)
@@ -88,7 +91,7 @@ class MLP(nn.Module):
         bound = math.sqrt(k)
         # toch.rand returns a tensor samples uniformly in [0, 1).
         # we scaling it to [l = -bound, r = bound] using the formula: (l - r) * torch.rand(x, y) + r
-        self.W = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
+        self.W = (-2 * bound) * torch.rand(out_features, in_features) + bound
 
     def forward(self, x):
         _, input_num = x.shape
@@ -109,8 +112,8 @@ class RNN(nn.Module):
         bound = math.sqrt(k)
         # toch.rand returns a tensor samples uniformly in [0, 1).
         # we scaling it to [l = -bound, r = bound] using the formula: (l - r) * torch.rand(x, y) + r
-        self.W = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
-        self.U = (-2 * bound) * torch.rand(out_features, out_features).cuda(device) + bound
+        self.W = (-2 * bound) * torch.rand(out_features, in_features) + bound
+        self.U = (-2 * bound) * torch.rand(out_features, out_features) + bound
 
     def forward(self, x, b_prev=None):
 
@@ -146,14 +149,14 @@ class LSTM(nn.Module):
         bound = math.sqrt(k)
         # toch.rand returns a tensor samples uniformly in [0, 1).
         # we scaling it to [l = -bound, r = bound] using the formula: (l - r) * torch.rand(x, y) + r
-        self.Wi = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
-        self.Ui = (-2 * bound) * torch.rand(out_features, out_features).cuda(device) + bound
-        self.Wf = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
-        self.Uf = (-2 * bound) * torch.rand(out_features, out_features).cuda(device) + bound
-        self.Wg = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
-        self.Ug = (-2 * bound) * torch.rand(out_features, out_features).cuda(device) + bound
-        self.Wo = (-2 * bound) * torch.rand(out_features, in_features).cuda(device) + bound
-        self.Uo = (-2 * bound) * torch.rand(out_features, out_features).cuda(device) + bound
+        self.Wi = (-2 * bound) * torch.rand(out_features, in_features) + bound
+        self.Ui = (-2 * bound) * torch.rand(out_features, out_features) + bound
+        self.Wf = (-2 * bound) * torch.rand(out_features, in_features) + bound
+        self.Uf = (-2 * bound) * torch.rand(out_features, out_features) + bound
+        self.Wg = (-2 * bound) * torch.rand(out_features, in_features) + bound
+        self.Ug = (-2 * bound) * torch.rand(out_features, out_features) + bound
+        self.Wo = (-2 * bound) * torch.rand(out_features, in_features) + bound
+        self.Uo = (-2 * bound) * torch.rand(out_features, out_features) + bound
 
     def forward(self, x, state=None):
         h_prev = state[0] if state is not None else None
