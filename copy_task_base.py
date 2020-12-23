@@ -18,8 +18,8 @@ np.random.seed(seed)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-def cross_entropy_formula(step):
-    return (10 * np.log(8)) / (step + 20)
+def cross_entropy_formula(T, K):
+    return (K * np.log(8)) / (T + (2 * K))
 
 
 class MLP(nn.Module):
@@ -242,17 +242,14 @@ def main():
     opt_RNN = torch.optim.RMSprop(model_RNN.parameters(), lr=lr)
     opt_LSTM = torch.optim.RMSprop(model_LSTM.parameters(), lr=lr)
 
-    print("Baseline Loss {:.3f}".format(cross_entropy_formula(1)))
     correct_mlp = 0
     correct_rnn = 0
     correct_lstm = 0
     t_0 = time()
     for step in range(iter):
-        # xs.append(step)
-        # ys.append(cross_entropy_formula(step))
 
         xs = np.append(xs, step)
-        ys = np.append(ys, cross_entropy_formula(T))
+        ys = np.append(ys, cross_entropy_formula(T, K))
         bX = X[step * batch_size: (step + 1) * batch_size]
         bY = Y[step * batch_size: (step + 1) * batch_size]
 
