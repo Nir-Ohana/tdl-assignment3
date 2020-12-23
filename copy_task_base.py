@@ -169,9 +169,9 @@ class Model(nn.Module):
         for input in torch.unbind(inputs, dim=1):
             if self.architecture == MLP:
                 state = self.rnn(input)
-            elif self.architecture == RNN:
+            elif self.architecture == nn.RNNCell:
                 state = self.rnn(input, state)
-            elif self.architecture == LSTM:
+            elif self.architecture == nn.LSTMCell:
                 state = self.rnn(input, state)[1]
 
             outputs.append(self.V(state))
@@ -182,7 +182,7 @@ class Model(nn.Module):
         return self.loss_func(logits.view(-1, 9), y.view(-1))
 
 
-T = 10
+T = 5
 K = 3
 
 batch_size = 128
@@ -226,8 +226,8 @@ def main():
     # print(ohX)
     # print('{}, {}'.format(X[:batch_size].shape, ohX.shape))
     model_MLP = Model(n_classes, hidden_size, MLP)
-    model_RNN = Model(n_classes, hidden_size, RNN)
-    model_LSTM = Model(n_classes, hidden_size, LSTM)
+    model_RNN = Model(n_classes, hidden_size, nn.RNNCell)
+    model_LSTM = Model(n_classes, hidden_size, nn.LSTMCell)
     print(device)
     model_MLP.cuda(device)
     model_RNN.cuda(device)
@@ -283,7 +283,7 @@ def main():
 
             # print(logits_MLP)
             # print(logits_MLP.shape)
-            # torch.set_printoptions(profile="full")
+            torch.set_printoptions(profile="full")
             # print(logits_MLP.data)
             # print(logits_MLP.data.shape)
             # print(logits_MLP.data[0])
@@ -295,16 +295,18 @@ def main():
             predicted_mlp = torch.argmax(logits_MLP, dim=2, keepdim=False)
             predicted_rnn = torch.argmax(logits_RNN, dim=2, keepdim=False)
             predicted_lstm = torch.argmax(logits_LSTM, dim=2, keepdim=False)
-
-            correct_mlp = (predicted_mlp == bY).sum().item()
-            print(correct_mlp)
-            correct_rnn = (predicted_rnn == bY).sum().item()
-            correct_lstm = (predicted_lstm == bY).sum().item()
-            print("MLP accuracy is : {}".format(100 * correct_mlp / (batch_size * 16)))
-            print("RNN accuracy is : {}".format(100 * correct_rnn / (batch_size * 16)))
-            print("LSTM accuracy is : {}".format(100 * correct_lstm / (batch_size * 16)))
-            # print(torch.max(logits_MLP, dim=2, keepdim=False).indices.shape)
-            # print(torch.max(logits_RNN, dim=1, keepdim=False).values)
+            # print(predicted_mlp)
+            # evaluate(model_MLP, ohX, Y[:128])
+            correct_mlp = (predicted_mlp[:, (T + 2 * K - 3):] == bY[:, (T + 2 * K - 3):]).sum().item()
+            # print(correct_mlp)
+            correct_rnn = (predicted_rnn[:, (T + 2 * K - 3):] == bY[:, (T + 2 * K - 3):]).sum().item()
+            correct_lstm = (predicted_lstm[:, (T + 2 * K - 3):] == bY[:, (T + 2 * K - 3):]).sum().item()
+            print("MLP accuracy is : {}".format(100 * correct_mlp / (batch_size * 3)))
+            print("RNN accuracy is : {}".format(100 * correct_rnn / (batch_size * 3)))
+            print("LSTM accuracy is : {}".format(100 * correct_lstm / (batch_size * 3)))
+            # print(logits_MLP)
+            # print(torch.argmax(logits_RNN, dim=2, keepdim=False))
+            # print(torch.max(logits_MLP, dim=2, keepdim=False).values)
             # print(torch.max(logits_MLP, dim=2, keepdim=True).indices.reshape(batch_size, T + 2 * K).shape)
             # print(torch.max(logits_MLP, dim=2, keepdim=True).values.reshape(batch_size, T + 2 * K).shape)
             # print(bY)
@@ -322,9 +324,9 @@ def main():
             print(logits_MLP.shape)
 
     t_1 = time()
-    ohX = torch.FloatTensor(batch_size, T + 2 * K, n_characters).cuda(device)
-    onehot(ohX, X[:128])
-    evaluate(model_MLP, ohX, Y[:128])
+    # ohX = torch.FloatTensor(batch_size, T + 2 * K, n_characters).cuda(device)
+    # onehot(ohX, X[:128])
+    # evaluate(model_MLP, ohX, Y[:128])
     print("training took : {:.3f}".format(t_1 - t_0))
     plt.plot(xs, ys, '--g', label='Baseline')
     plt.plot(xs, ys_loss_mlp, '-m', label='MLP')

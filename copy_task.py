@@ -21,7 +21,6 @@ def copy_data(T, K, batch_size):
     zeros2 = np.zeros((batch_size, K - 1))
     zeros3 = np.zeros((batch_size, K + T))
     marker = 9 * np.ones((batch_size, 1))
-
     x = torch.LongTensor(np.concatenate((seq, zeros1, marker, zeros2), axis=1))
     y = torch.LongTensor(np.concatenate((zeros3, seq), axis=1))
 
