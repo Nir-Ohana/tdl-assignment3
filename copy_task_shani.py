@@ -1,15 +1,12 @@
 import numpy as np
-import math
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
+import math
 import sys
-from time import time
 
-# print(np.__version__)
-from torch.backends import cudnn
-
-# print(torch.__version__)
+print(np.__version__)
+print(torch.__version__)
 
 # Set the seed of PRNG manually for reproducibility
 seed = 1234
@@ -19,6 +16,65 @@ np.random.seed(seed)
 
 def cross_entropy_formula(T, K):
     return (K * np.log(8)) / (T + (2 * K))
+
+
+# Copy data
+def copy_data(T, K, batch_size):
+    seq = np.random.randint(1, high=9, size=(batch_size, K))
+    zeros1 = np.zeros((batch_size, T))
+    zeros2 = np.zeros((batch_size, K - 1))
+    zeros3 = np.zeros((batch_size, K + T))
+    marker = 9 * np.ones((batch_size, 1))
+
+    x = torch.LongTensor(np.concatenate((seq, zeros1, marker, zeros2), axis=1))
+    y = torch.LongTensor(np.concatenate((zeros3, seq), axis=1))
+
+    return x, y
+
+
+# one hot encoding
+def onehot(out, input):
+    out.zero_()
+    in_unsq = torch.unsqueeze(input, 2)
+    out.scatter_(2, in_unsq, 1)
+
+
+# Class for handling copy data
+class Model(nn.Module):
+    def __init__(self, m, k, architecture):
+        super(Model, self).__init__()
+
+        self.m = m
+        self.k = k
+
+        self.architecture = architecture
+        self.rnn = architecture(m + 1, k)
+        self.V = nn.Linear(k, m)
+
+        # loss for the copy data
+        self.loss_func = nn.CrossEntropyLoss()
+
+    def forward(self, inputs):
+        state_rnn = torch.zeros(inputs.size(0), self.k, requires_grad=False)
+        state_h_lstm = torch.zeros(inputs.size(0), self.k, requires_grad=False)
+        state_c_lstm = torch.zeros(inputs.size(0), self.k, requires_grad=False)
+
+        outputs = []
+        for input in torch.unbind(inputs, dim=1):
+            if self.architecture == MLP:
+                state_mlp = self.rnn(input)
+                outputs.append(self.V(state_mlp))
+            elif self.architecture == RNN:
+                state_rnn = self.rnn(input, state_rnn)
+                outputs.append(self.V(state_rnn))
+            elif self.architecture == LSTM:
+                state_h_lstm, state_c_lstm = self.rnn(input, (state_h_lstm, state_c_lstm))
+                outputs.append(self.V(state_h_lstm))
+
+        return torch.stack(outputs, dim=1)
+
+    def loss(self, logits, y):
+        return self.loss_func(logits.view(-1, 9), y.view(-1))
 
 
 class MLP(nn.Module):
@@ -34,9 +90,12 @@ class MLP(nn.Module):
         self.W = (-2 * bound) * torch.rand(out_features, in_features) + bound
 
     def forward(self, x):
+
+        # check validity of x
         _, input_num = x.shape
         if input_num != self.in_features:
             sys.exit(f'Wrong x size: {x}')
+
         y = x @ self.W.t()
         return y
 
@@ -69,6 +128,7 @@ class RNN(nn.Module):
                 sys.exit(f'Wrong b size: {b_prev}')
         else:
             b_prev = torch.zeros(x.shape[0], self.out_features)
+
         a = (x @ self.W.t()) + (b_prev @ self.U.t())
 
         if self.non_linearity == "tanh":
@@ -107,85 +167,20 @@ class LSTM(nn.Module):
         if input_num != self.in_features:
             sys.exit(f'Wrong x size: {x}')
 
-        # check validity of b_prev
-        # if h_prev is not None:
-        #     _, output_num = h_prev.shape
-        #     if output_num != self.out_features:
-        #         sys.exit(f'Wrong h size: {h_prev}')
         if h_prev is None or c_prev is None:
             h_prev = torch.zeros(x.shape[0], self.out_features)
             c_prev = torch.zeros(x.shape[0], self.out_features)
 
-        activation_func = nn.Sigmoid()
-        i = activation_func((x @ self.Wi.t()) + (h_prev @ self.Ui.t()))
-        f = activation_func((x @ self.Wf.t()) + (h_prev @ self.Uf.t()))
+        i = torch.sigmoid((x @ self.Wi.t()) + (h_prev @ self.Ui.t()))
+        f = torch.sigmoid((x @ self.Wf.t()) + (h_prev @ self.Uf.t()))
         g = torch.tanh((x @ self.Wg.t()) + (h_prev @ self.Ug.t()))
-        o = activation_func((x @ self.Wo.t()) + (h_prev @ self.Uo.t()))
+        o = torch.sigmoid((x @ self.Wo.t()) + (h_prev @ self.Uo.t()))
         c = (f * c_prev) + (i * g)
-        # c = torch.mul(f, c_prev) + torch.mul(i, g)
         h = o * torch.tanh(c_prev)
-        # h = torch.mul(o, torch.tanh(c_prev))
         return h, c
 
 
-# Copy data
-def copy_data(T, K, batch_size):
-    seq = np.random.randint(1, high=9, size=(batch_size, K))
-    zeros1 = np.zeros((batch_size, T))
-    zeros2 = np.zeros((batch_size, K - 1))
-    zeros3 = np.zeros((batch_size, K + T))
-    marker = 9 * np.ones((batch_size, 1))
-
-    x = torch.LongTensor(np.concatenate((seq, zeros1, marker, zeros2), axis=1))
-    y = torch.LongTensor(np.concatenate((zeros3, seq), axis=1))
-
-    return x, y
-
-
-# one hot encoding
-def onehot(out, input):
-    out.zero_()
-    in_unsq = torch.unsqueeze(input, 2)
-    out.scatter_(2, in_unsq, 1)
-
-
-# Class for handling copy data
-class Model(nn.Module):
-    def __init__(self, m, k, architecture):
-        super(Model, self).__init__()
-
-        self.m = m
-        self.k = k
-        self.architecture = architecture
-        self.rnn = architecture(m + 1, k)
-        self.V = nn.Linear(k, m)
-
-        # loss for the copy data
-        self.loss_func = nn.CrossEntropyLoss()
-
-    def forward(self, inputs):
-        state = torch.zeros(inputs.size(0), self.k, requires_grad=False)
-
-        outputs = []
-        for input in torch.unbind(inputs, dim=1):
-            if self.architecture == MLP:
-                state = self.rnn(input)
-            elif self.architecture == nn.RNN:
-                state = self.rnn(input, state)
-            elif self.architecture == nn.RNNCell:
-                state = self.rnn(input, state)
-            elif self.architecture == nn.LSTM:
-                state = self.rnn(input, state)[1]
-
-            outputs.append(self.V(state))
-
-        return torch.stack(outputs, dim=1)
-
-    def loss(self, logits, y):
-        return self.loss_func(logits.view(-1, 9), y.view(-1))
-
-
-T = 20
+T = 5
 K = 3
 
 batch_size = 128
@@ -195,18 +190,7 @@ n_classes = 9
 hidden_size = 64
 n_characters = n_classes + 1
 lr = 1e-3
-print_every = 100
-
-
-def evaluate(model, test_x, test_y, criterion=nn.CrossEntropyLoss):
-    with torch.no_grad():
-        out = model(test_x)
-        loss = model.loss(out, test_y)
-        pred = out.view(-1, n_classes).data.max(1, keepdim=True)[1]
-        correct = pred.eq(test_y.data.view_as(pred)).cpu().sum()
-        counter = out.view(-1, n_classes).size(0)
-        print('\nTest set: Average loss: {:.8f}  |  Accuracy: {:.4f}\n'.format(
-            loss.item(), 100. * correct / counter))
+print_every = 20
 
 
 def main():
@@ -219,68 +203,46 @@ def main():
 
     # create the training data
     X, Y = copy_data(T, K, n_train)
-    # print('{}, {}'.format(X.shape, Y.shape))
-    # plt.imshow(X[:3])
-    # plt.show()
-    # plt.imshow(Y[:3])
-    # plt.show()
+    print('{}, {}'.format(X.shape, Y.shape))
 
     ohX = torch.FloatTensor(batch_size, T + 2 * K, n_characters)
     onehot(ohX, X[:batch_size])
-    # print(ohX)
-    # print('{}, {}'.format(X[:batch_size].shape, ohX.shape))
+    print('{}, {}'.format(X[:batch_size].shape, ohX.shape))
 
-    model_BASELINE = Model(n_classes, hidden_size, nn.RNNCell)
     model_MLP = Model(n_classes, hidden_size, MLP)
     model_RNN = Model(n_classes, hidden_size, RNN)
     model_LSTM = Model(n_classes, hidden_size, LSTM)
 
-    # cudnn.benchmark = True
-    # cudnn.fastest = True
-    model_BASELINE.train()
     model_MLP.train()
     model_RNN.train()
     model_LSTM.train()
 
-    opt_BASELINE = torch.optim.RMSprop(model_BASELINE.parameters(), lr=lr)
     opt_MLP = torch.optim.RMSprop(model_MLP.parameters(), lr=lr)
     opt_RNN = torch.optim.RMSprop(model_RNN.parameters(), lr=lr)
     opt_LSTM = torch.optim.RMSprop(model_LSTM.parameters(), lr=lr)
 
-    correct_baseline = 0
-    correct_mlp = 0
-    correct_rnn = 0
-    correct_lstm = 0
-
     for step in range(iter):
-
         bX = X[step * batch_size: (step + 1) * batch_size]
         bY = Y[step * batch_size: (step + 1) * batch_size]
 
         onehot(ohX, bX)
-        # evaluate(model_MLP, ohX, bY)
 
-        opt_BASELINE.zero_grad()
         opt_MLP.zero_grad()
         opt_RNN.zero_grad()
         opt_LSTM.zero_grad()
 
-        logits_BASELINE = model_BASELINE(ohX)
         logits_MLP = model_MLP(ohX)
         logits_RNN = model_RNN(ohX)
         logits_LSTM = model_LSTM(ohX)
 
-        loss_BASELINE = model_BASELINE.loss(logits_BASELINE, bY)
         loss_MLP = model_MLP.loss(logits_MLP, bY)
         loss_RNN = model_RNN.loss(logits_RNN, bY)
         loss_LSTM = model_LSTM.loss(logits_LSTM, bY)
 
-        loss_BASELINE.backward()
         loss_MLP.backward()
         loss_RNN.backward()
         loss_LSTM.backward()
 
-        opt_BASELINE.step()
         opt_MLP.step()
         opt_RNN.step()
         opt_LSTM.step()
@@ -291,27 +253,19 @@ def main():
         ys_loss_rnn = np.append(ys_loss_rnn, loss_RNN.item())
         ys_loss_lstm = np.append(ys_loss_lstm, loss_LSTM.item())
 
-        # print("BASELINE accuracy is : {}".format((100 * correct_baseline) / (batch_size * 3)))
-        # print("MLP accuracy is : {}".format((100 * correct_mlp) / (batch_size * 3)))
-        # print("RNN accuracy is : {}".format((100 * correct_rnn) / (batch_size * 3)))
-        # print("LSTM accuracy is : {}".format((100 * correct_lstm) / (batch_size * 3)))
-        # print()
-
         if step == 4999:
-            predicted_baseline = torch.argmax(logits_BASELINE, dim=2, keepdim=False)
+
             predicted_mlp = torch.argmax(logits_MLP, dim=2, keepdim=False)
             predicted_rnn = torch.argmax(logits_RNN, dim=2, keepdim=False)
             predicted_lstm = torch.argmax(logits_LSTM, dim=2, keepdim=False)
 
-            correct_baseline = (predicted_baseline[:, ((T + (2 * K)) - 3):] == bY[:, ((T + (2 * K)) - 3):]).sum().item()
-            correct_mlp = (predicted_mlp[:, ((T + (2 * K)) - 3):] == bY[:, ((T + (2 * K)) - 3):]).sum().item()
-            correct_rnn = (predicted_rnn[:, ((T + (2 * K)) - 3):] == bY[:, ((T + (2 * K)) - 3):]).sum().item()
-            correct_lstm = (predicted_lstm[:, ((T + (2 * K)) - 3):] == bY[:, ((T + (2 * K)) - 3):]).sum().item()
+            correct_mlp = (predicted_mlp[:, (T + K):T + 2 * K] == bY[:, (T + K): T + 2 * K]).sum().item()
+            correct_rnn = (predicted_rnn[:, (T + K):T + 2 * K] == bY[:, (T + K): T + 2 * K]).sum().item()
+            correct_lstm = (predicted_lstm[:, (T + K):T + 2 * K] == bY[:, (T + K): T + 2 * K]).sum().item()
 
-            print("FINAL BASELINE accuracy is : {}".format((100 * correct_baseline) / (batch_size * 3)))
-            print("FINAL MLP accuracy is : {}".format((100 * correct_mlp) / (batch_size * 3)))
-            print("FINAL RNN accuracy is : {}".format((100 * correct_rnn) / (batch_size * 3)))
-            print("FINAL LSTM accuracy is : {}".format((100 * correct_lstm) / (batch_size * 3)))
+            print("MLP accuracy is : {}".format(100 * correct_mlp / (batch_size * K)))
+            print("RNN accuracy is : {}".format(100 * correct_rnn / (batch_size * K)))
+            print("LSTM accuracy is : {}".format(100 * correct_lstm / (batch_size * K)))
 
     plt.plot(xs, ys, '--g', label='Baseline')
     plt.plot(xs, ys_loss_mlp, '-m', label='MLP')
