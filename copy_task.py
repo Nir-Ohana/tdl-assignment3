@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-import sys
 import math
+import sys
 
 print(np.__version__)
 print(torch.__version__)
@@ -21,6 +21,7 @@ def copy_data(T, K, batch_size):
     zeros2 = np.zeros((batch_size, K - 1))
     zeros3 = np.zeros((batch_size, K + T))
     marker = 9 * np.ones((batch_size, 1))
+
     x = torch.LongTensor(np.concatenate((seq, zeros1, marker, zeros2), axis=1))
     y = torch.LongTensor(np.concatenate((zeros3, seq), axis=1))
 
@@ -41,6 +42,7 @@ class Model(nn.Module):
 
         self.m = m
         self.k = k
+
         self.architecture = architecture
         self.rnn = architecture(m + 1, k)
         self.V = nn.Linear(k, m)
@@ -49,35 +51,25 @@ class Model(nn.Module):
         self.loss_func = nn.CrossEntropyLoss()
 
     def forward(self, inputs):
-        state = torch.zeros(inputs.size(0), self.k, requires_grad=False)
+        state_rnn = torch.zeros(inputs.size(0), self.k, requires_grad=False)
+        state_h_lstm = torch.zeros(inputs.size(0), self.k, requires_grad=False)
+        state_c_lstm = torch.zeros(inputs.size(0), self.k, requires_grad=False)
 
         outputs = []
         for input in torch.unbind(inputs, dim=1):
             if self.architecture == MLP:
-                state = self.rnn(input)
+                self.rnn(input)
             elif self.architecture == RNN:
-                state = self.rnn(input, state)
+                state_rnn = self.rnn(input, state_rnn)
+                outputs.append(self.V(state_rnn))
             elif self.architecture == LSTM:
-                state = self.rnn(input, state)[1]
-            outputs.append(self.V(state))
+                state_h_lstm, state_c_lstm = self.rnn(input, (state_h_lstm, state_c_lstm))
+                outputs.append(self.V(state_h_lstm))
 
         return torch.stack(outputs, dim=1)
 
     def loss(self, logits, y):
         return self.loss_func(logits.view(-1, 9), y.view(-1))
-
-
-T = 5
-K = 3
-
-batch_size = 128
-iter = 5000
-n_train = iter * batch_size
-n_classes = 9
-hidden_size = 64
-n_characters = n_classes + 1
-lr = 1e-3
-print_every = 20
 
 
 class MLP(nn.Module):
@@ -93,9 +85,12 @@ class MLP(nn.Module):
         self.W = (-2 * bound) * torch.rand(out_features, in_features) + bound
 
     def forward(self, x):
+
+        # check validity of x
         _, input_num = x.shape
         if input_num != self.in_features:
             sys.exit(f'Wrong x size: {x}')
+
         y = x @ self.W.t()
         return y
 
@@ -128,6 +123,7 @@ class RNN(nn.Module):
                 sys.exit(f'Wrong b size: {b_prev}')
         else:
             b_prev = torch.zeros(x.shape[0], self.out_features)
+
         a = (x @ self.W.t()) + (b_prev @ self.U.t())
 
         if self.non_linearity == "tanh":
@@ -170,14 +166,26 @@ class LSTM(nn.Module):
             h_prev = torch.zeros(x.shape[0], self.out_features)
             c_prev = torch.zeros(x.shape[0], self.out_features)
 
-        activation_func = nn.Sigmoid()
-        i = activation_func((x @ self.Wi.t()) + (h_prev @ self.Ui.t()))
-        f = activation_func((x @ self.Wf.t()) + (h_prev @ self.Uf.t()))
+        i = torch.sigmoid((x @ self.Wi.t()) + (h_prev @ self.Ui.t()))
+        f = torch.sigmoid((x @ self.Wf.t()) + (h_prev @ self.Uf.t()))
         g = torch.tanh((x @ self.Wg.t()) + (h_prev @ self.Ug.t()))
-        o = activation_func((x @ self.Wo.t()) + (h_prev @ self.Uo.t()))
+        o = torch.sigmoid((x @ self.Wo.t()) + (h_prev @ self.Uo.t()))
         c = (f * c_prev) + (i * g)
         h = o * torch.tanh(c_prev)
         return h, c
+
+
+T = 5
+K = 3
+
+batch_size = 128
+iter = 5000
+n_train = iter * batch_size
+n_classes = 9
+hidden_size = 64
+n_characters = n_classes + 1
+lr = 1e-3
+print_every = 20
 
 
 def main(architecture):
