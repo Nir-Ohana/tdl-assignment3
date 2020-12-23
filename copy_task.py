@@ -58,7 +58,8 @@ class Model(nn.Module):
         outputs = []
         for input in torch.unbind(inputs, dim=1):
             if self.architecture == MLP:
-                self.rnn(input)
+                output = self.rnn(input)
+                outputs.append(self.V(output))
             elif self.architecture == RNN:
                 state_rnn = self.rnn(input, state_rnn)
                 outputs.append(self.V(state_rnn))
