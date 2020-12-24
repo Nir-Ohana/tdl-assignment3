@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import math
 import sys
+from time import time
 
 print(np.__version__)
 print(torch.__version__)
@@ -87,7 +88,7 @@ class MLP(nn.Module):
         bound = math.sqrt(k)
         # toch.rand returns a tensor samples uniformly in [0, 1).
         # we scaling it to [l = -bound, r = bound] using the formula: (l - r) * torch.rand(x, y) + r
-        self.W = (-2 * bound) * torch.rand(out_features, in_features) + bound
+        self.W = nn.Parameter((-2 * bound) * torch.rand(out_features, in_features, requires_grad=True) + bound)
 
     def forward(self, x):
         # check validity of x
@@ -110,8 +111,8 @@ class RNN(nn.Module):
         bound = math.sqrt(k)
         # toch.rand returns a tensor samples uniformly in [0, 1).
         # we scaling it to [l = -bound, r = bound] using the formula: (l - r) * torch.rand(x, y) + r
-        self.W = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.U = (-2 * bound) * torch.rand(out_features, out_features) + bound
+        self.W = nn.Parameter((-2 * bound) * torch.rand(out_features, in_features, requires_grad=True) + bound)
+        self.U = nn.Parameter((-2 * bound) * torch.rand(out_features, out_features, requires_grad=True) + bound)
 
     def forward(self, x, b_prev=None):
 
@@ -148,14 +149,14 @@ class LSTM(nn.Module):
         bound = math.sqrt(k)
         # toch.rand returns a tensor samples uniformly in [0, 1).
         # we scaling it to [l = -bound, r = bound] using the formula: (l - r) * torch.rand(x, y) + r
-        self.Wi = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.Ui = (-2 * bound) * torch.rand(out_features, out_features) + bound
-        self.Wf = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.Uf = (-2 * bound) * torch.rand(out_features, out_features) + bound
-        self.Wg = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.Ug = (-2 * bound) * torch.rand(out_features, out_features) + bound
-        self.Wo = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.Uo = (-2 * bound) * torch.rand(out_features, out_features) + bound
+        self.Wi = nn.Parameter((-2 * bound) * torch.rand(out_features, in_features, requires_grad=True) + bound)
+        self.Ui = nn.Parameter((-2 * bound) * torch.rand(out_features, out_features, requires_grad=True) + bound)
+        self.Wf = nn.Parameter((-2 * bound) * torch.rand(out_features, in_features, requires_grad=True) + bound)
+        self.Uf = nn.Parameter((-2 * bound) * torch.rand(out_features, out_features, requires_grad=True) + bound)
+        self.Wg = nn.Parameter((-2 * bound) * torch.rand(out_features, in_features, requires_grad=True) + bound)
+        self.Ug = nn.Parameter((-2 * bound) * torch.rand(out_features, out_features, requires_grad=True) + bound)
+        self.Wo = nn.Parameter((-2 * bound) * torch.rand(out_features, in_features, requires_grad=True) + bound)
+        self.Uo = nn.Parameter((-2 * bound) * torch.rand(out_features, out_features, requires_grad=True) + bound)
 
     def forward(self, x, state=None):
         h_prev = state[0] if state is not None else None
@@ -179,11 +180,11 @@ class LSTM(nn.Module):
         return h, c
 
 
-T = 10
+T = 100
 K = 3
 
 batch_size = 128
-iter = 5000
+iter = 7813
 n_train = iter * batch_size
 n_classes = 9
 hidden_size = 64
@@ -196,6 +197,7 @@ def calc_baseline_acc(y_batch_tensor):
     print(y_batch_tensor)
     random_tensor = torch.from_numpy(np.random.randint(low=1, high=9, size=y_batch_tensor.shape))
     print(random_tensor)
+    print((random_tensor == y_batch_tensor).sum().item())
     return (random_tensor == y_batch_tensor).sum().item()
 
 
@@ -226,6 +228,7 @@ def main():
     opt_RNN = torch.optim.RMSprop(model_RNN.parameters(), lr=lr)
     opt_LSTM = torch.optim.RMSprop(model_LSTM.parameters(), lr=lr)
 
+    t_0 = time()
     for step in range(iter):
         bX = X[step * batch_size: (step + 1) * batch_size]
         bY = Y[step * batch_size: (step + 1) * batch_size]
@@ -244,6 +247,8 @@ def main():
         loss_RNN = model_RNN.loss(logits_RNN, bY)
         loss_LSTM = model_LSTM.loss(logits_LSTM, bY)
 
+        print('Step={}, Loss={:.4f}'.format(step, loss_MLP.item()))
+
         loss_MLP.backward()
         loss_RNN.backward()
         loss_LSTM.backward()
@@ -252,13 +257,13 @@ def main():
         opt_RNN.step()
         opt_LSTM.step()
 
-        xs = np.append(xs, step)
+        xs = np.append(xs, (step * batch_size) / 1000)
         ys = np.append(ys, cross_entropy_formula(T, K))
         ys_loss_mlp = np.append(ys_loss_mlp, loss_MLP.item())
         ys_loss_rnn = np.append(ys_loss_rnn, loss_RNN.item())
         ys_loss_lstm = np.append(ys_loss_lstm, loss_LSTM.item())
 
-        if step == 4999:
+        if step == iter - 1:
             predicted_mlp = torch.argmax(logits_MLP, dim=2, keepdim=False)
             predicted_rnn = torch.argmax(logits_RNN, dim=2, keepdim=False)
             predicted_lstm = torch.argmax(logits_LSTM, dim=2, keepdim=False)
@@ -267,18 +272,20 @@ def main():
             correct_rnn = (predicted_rnn[:, (T + K):T + 2 * K] == bY[:, (T + K): T + 2 * K]).sum().item()
             correct_lstm = (predicted_lstm[:, (T + K):T + 2 * K] == bY[:, (T + K): T + 2 * K]).sum().item()
             correct_baseline = calc_baseline_acc(bY[:, (T + K): T + 2 * K])
-            print("MLP accuracy is : {}".format(100 * correct_mlp / (batch_size * K)))
-            print("RNN accuracy is : {}".format(100 * correct_rnn / (batch_size * K)))
-            print("LSTM accuracy is : {}".format(100 * correct_lstm / (batch_size * K)))
-            print("Baseline accuracy is : {}".format(100 * correct_baseline / (batch_size * K)))
+            print("MLP accuracy is : {:.3f}".format(100 * correct_mlp / (batch_size * K)))
+            print("RNN accuracy is : {:.3f}".format(100 * correct_rnn / (batch_size * K)))
+            print("LSTM accuracy is : {:.3f}".format(100 * correct_lstm / (batch_size * K)))
+            print("Baseline accuracy is : {:.3f}".format(100 * correct_baseline / (batch_size * K)))
 
+    t_1 = time()
+    print("training took : {:.3f}".format(t_1 - t_0))
     plt.plot(xs, ys, '--g', label='Baseline')
     plt.plot(xs, ys_loss_mlp, '-m', label='MLP')
     plt.plot(xs, ys_loss_rnn, '-y', label='RNN')
     plt.plot(xs, ys_loss_lstm, '-c', label='LSTM')
     plt.title('{} Time lag'.format(T))
     plt.legend()
-    plt.xlabel('Training examples')
+    plt.xlabel('Training examples (thousands)')
     plt.ylabel('Cross entropy')
     plt.show()
 
