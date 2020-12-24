@@ -90,7 +90,6 @@ class MLP(nn.Module):
         self.W = (-2 * bound) * torch.rand(out_features, in_features) + bound
 
     def forward(self, x):
-
         # check validity of x
         _, input_num = x.shape
         if input_num != self.in_features:
@@ -192,14 +191,15 @@ n_characters = n_classes + 1
 lr = 1e-3
 print_every = 20
 
-def calc_baseline_acc(pred_tensor):
-    print(pred_tensor)
-    random_tensor = torch.from_numpy(np.random.randint(low=1, high=9, size=pred_tensor.shape))
+
+def calc_baseline_acc(y_batch_tensor):
+    print(y_batch_tensor)
+    random_tensor = torch.from_numpy(np.random.randint(low=1, high=9, size=y_batch_tensor.shape))
     print(random_tensor)
-    return (random_tensor == pred_tensor).sum().item()
+    return (random_tensor == y_batch_tensor).sum().item()
+
 
 def main():
-
     xs = np.array([])
     ys_loss_mlp = np.array([])
     ys_loss_rnn = np.array([])
@@ -259,7 +259,6 @@ def main():
         ys_loss_lstm = np.append(ys_loss_lstm, loss_LSTM.item())
 
         if step == 4999:
-
             predicted_mlp = torch.argmax(logits_MLP, dim=2, keepdim=False)
             predicted_rnn = torch.argmax(logits_RNN, dim=2, keepdim=False)
             predicted_lstm = torch.argmax(logits_LSTM, dim=2, keepdim=False)
