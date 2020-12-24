@@ -180,7 +180,7 @@ class LSTM(nn.Module):
         return h, c
 
 
-T = 5
+T = 10
 K = 3
 
 batch_size = 128
@@ -192,6 +192,11 @@ n_characters = n_classes + 1
 lr = 1e-3
 print_every = 20
 
+def calc_baseline_acc(pred_tensor):
+    print(pred_tensor)
+    random_tensor = torch.from_numpy(np.random.randint(low=1, high=9, size=pred_tensor.shape))
+    print(random_tensor)
+    return (random_tensor == pred_tensor).sum().item()
 
 def main():
 
@@ -262,10 +267,11 @@ def main():
             correct_mlp = (predicted_mlp[:, (T + K):T + 2 * K] == bY[:, (T + K): T + 2 * K]).sum().item()
             correct_rnn = (predicted_rnn[:, (T + K):T + 2 * K] == bY[:, (T + K): T + 2 * K]).sum().item()
             correct_lstm = (predicted_lstm[:, (T + K):T + 2 * K] == bY[:, (T + K): T + 2 * K]).sum().item()
-
+            correct_baseline = calc_baseline_acc(bY[:, (T + K): T + 2 * K])
             print("MLP accuracy is : {}".format(100 * correct_mlp / (batch_size * K)))
             print("RNN accuracy is : {}".format(100 * correct_rnn / (batch_size * K)))
             print("LSTM accuracy is : {}".format(100 * correct_lstm / (batch_size * K)))
+            print("Baseline accuracy is : {}".format(100 * correct_baseline / (batch_size * K)))
 
     plt.plot(xs, ys, '--g', label='Baseline')
     plt.plot(xs, ys_loss_mlp, '-m', label='MLP')
