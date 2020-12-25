@@ -51,6 +51,7 @@ class Model(nn.Module):
         self.loss_func = nn.CrossEntropyLoss()
 
     def forward(self, inputs):
+
         state_rnn = torch.zeros(inputs.size(0), self.k, requires_grad=False)
         state_h_lstm = torch.zeros(inputs.size(0), self.k, requires_grad=False)
         state_c_lstm = torch.zeros(inputs.size(0), self.k, requires_grad=False)
@@ -83,7 +84,7 @@ class MLP(nn.Module):
         bound = math.sqrt(k)
         # toch.rand returns a tensor samples uniformly in [0, 1).
         # we scaling it to [l = -bound, r = bound] using the formula: (l - r) * torch.rand(x, y) + r
-        self.W = (-2 * bound) * torch.rand(out_features, in_features) + bound
+        self.W = nn.Parameter((-2 * bound) * torch.rand(out_features, in_features, requires_grad=True) + bound)
 
     def forward(self, x):
 
@@ -107,8 +108,8 @@ class RNN(nn.Module):
         bound = math.sqrt(k)
         # toch.rand returns a tensor samples uniformly in [0, 1).
         # we scaling it to [l = -bound, r = bound] using the formula: (l - r) * torch.rand(x, y) + r
-        self.W = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.U = (-2 * bound) * torch.rand(out_features, out_features) + bound
+        self.W = nn.Parameter((-2 * bound) * torch.rand(out_features, in_features, requires_grad=True) + bound)
+        self.U = nn.Parameter((-2 * bound) * torch.rand(out_features, out_features, requires_grad=True) + bound)
 
     def forward(self, x, b_prev=None):
 
@@ -145,14 +146,14 @@ class LSTM(nn.Module):
         bound = math.sqrt(k)
         # toch.rand returns a tensor samples uniformly in [0, 1).
         # we scaling it to [l = -bound, r = bound] using the formula: (l - r) * torch.rand(x, y) + r
-        self.Wi = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.Ui = (-2 * bound) * torch.rand(out_features, out_features) + bound
-        self.Wf = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.Uf = (-2 * bound) * torch.rand(out_features, out_features) + bound
-        self.Wg = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.Ug = (-2 * bound) * torch.rand(out_features, out_features) + bound
-        self.Wo = (-2 * bound) * torch.rand(out_features, in_features) + bound
-        self.Uo = (-2 * bound) * torch.rand(out_features, out_features) + bound
+        self.Wi = nn.Parameter((-2 * bound) * torch.rand(out_features, in_features, requires_grad=True) + bound)
+        self.Ui = nn.Parameter((-2 * bound) * torch.rand(out_features, out_features, requires_grad=True) + bound)
+        self.Wf = nn.Parameter((-2 * bound) * torch.rand(out_features, in_features, requires_grad=True) + bound)
+        self.Uf = nn.Parameter((-2 * bound) * torch.rand(out_features, out_features, requires_grad=True) + bound)
+        self.Wg = nn.Parameter((-2 * bound) * torch.rand(out_features, in_features, requires_grad=True) + bound)
+        self.Ug = nn.Parameter((-2 * bound) * torch.rand(out_features, out_features, requires_grad=True) + bound)
+        self.Wo = nn.Parameter((-2 * bound) * torch.rand(out_features, in_features, requires_grad=True) + bound)
+        self.Uo = nn.Parameter((-2 * bound) * torch.rand(out_features, out_features, requires_grad=True) + bound)
 
     def forward(self, x, state=None):
         h_prev = state[0] if state is not None else None
